@@ -38,7 +38,7 @@
 			if (!d) { clearTimeout(t); dbStav = 'nie'; stavDb(); return; }
 			db = d;
 			db.collection('pohyby').onSnapshot(function (snap) {
-				R = snap.docs.map(function (x) { var o = x.data() || {}; return { id: x.id, k: String(o.k || ''), typ: String(o.typ || ''), kart: +o.kart || 0, kk: +o.kk || 0, volne: +o.volne || 0, ks: Math.round(+o.ks || 0), t: String(o.t || ''), pozn: String(o.pozn || ''), obj: String(o.obj || ''), storno: !!o.storno }; });
+				R = snap.docs.map(function (x) { var o = x.data() || {}; return { exp: String(o.exp || ''), id: x.id, k: String(o.k || ''), typ: String(o.typ || ''), kart: +o.kart || 0, kk: +o.kk || 0, volne: +o.volne || 0, ks: Math.round(+o.ks || 0), t: String(o.t || ''), pozn: String(o.pozn || ''), obj: String(o.obj || ''), storno: !!o.storno }; });
 				R.sort(function (a, b) { return a.t < b.t ? 1 : a.t > b.t ? -1 : 0; });
 				if (!snap.metadata.fromCache) { clearTimeout(t); dbStav = 'ok'; }
 				prepocitaj(); stavDb();
@@ -198,7 +198,7 @@
 		var mv = R.filter(function (r) { return r.k === p.k; });
 		if (mv.length) {
 			h += '<h3>Pohyby zapísané v aplikácii</h3><div class="tw"><table><tr><th>Kedy</th><th>Pohyb</th><th class="num">Kusov</th><th></th></tr>' + mv.map(function (r) {
-				var popis = TYP[r.typ] || r.typ; if (r.kart) { popis += ' ' + r.kart + ' × ' + r.kk + (r.volne ? ' + ' + r.volne : ''); } if (r.obj) { popis += ' č. ' + r.obj; } if (r.pozn) { popis += ', ' + r.pozn; }
+				var popis = TYP[r.typ] || r.typ; if (r.kart) { popis += ' ' + r.kart + ' × ' + r.kk + (r.volne ? ' + ' + r.volne : ''); } if (r.obj) { popis += ' č. ' + r.obj; } if (r.exp) { popis += ', spotreba ' + r.exp; } if (r.pozn) { popis += ', ' + r.pozn; }
 				return '<tr' + (r.storno ? ' class="bcs-st"' : '') + '><td>' + esc(cas(r.t)) + '</td><td>' + esc(popis) + (r.storno ? ' (stornované)' : '') + '</td><td class="num">' + zn(r.ks) + '</td><td>' + (!r.storno && db && (r.typ === 'prijem' || r.typ === 'vydaj') ? '<button type="button" class="bcs-mini" data-bstorno="' + esc(r.id) + '">Storno</button>' : '') + '</td></tr>';
 			}).join('') + '</table></div>';
 		}
@@ -208,7 +208,7 @@
 		var p = prod(S.k); S.typ = typ; var pr = typ === 'prijem', s = p.img || p.foto;
 		panel('<h2 id="d-title">' + (pr ? 'Príjem na sklad' : 'Výdaj zo skladu') + '</h2><div class="bcs-prod">' + (s ? '<img alt="" src="' + s + '">' : '') + '<div><b>' + esc(p.name) + (p.vr ? ' – ' + esc(p.vr) : '') + '</b><br><span class="meta">Na sklade teraz: ' + p.stock + ' ks</span></div></div>' +
 			'<form id="bcs-pohyb" class="bcs-form"><div class="bcs-troj"><label>Kartónov<input name="kart" inputmode="numeric" pattern="[0-9]*" placeholder="0" autocomplete="off"></label><label>Ks v kartóne<input name="kk" inputmode="numeric" pattern="[0-9]*" placeholder="0" autocomplete="off"></label><label>Voľné kusy<input name="volne" inputmode="numeric" pattern="[0-9]*" placeholder="0" autocomplete="off"></label></div>' +
-			'<div id="bcs-vyp" class="bcs-vyp' + (pr ? '' : ' minus') + '"></div><label>Poznámka (nemusí byť)<input name="pozn" maxlength="120" autocomplete="off"></label><button class="bcs-btn' + (pr ? '' : ' cerv') + '" id="bcs-uloz" disabled>' + (pr ? 'Zapísať príjem' : 'Zapísať výdaj') + '</button></form><button type="button" class="bcs-btn sv" data-bk="' + esc(p.k) + '">Späť</button>');
+			'<div id="bcs-vyp" class="bcs-vyp' + (pr ? '' : ' minus') + '"></div>' + (pr ? '<label>Dátum spotreby (napr. 03/2028 alebo 15.03.2028)<input name="exp" maxlength="40" autocomplete="off" inputmode="text" placeholder="MM/RRRR"></label>' : '') + '<label>Poznámka (nemusí byť)<input name="pozn" maxlength="120" autocomplete="off"></label><button class="bcs-btn' + (pr ? '' : ' cerv') + '" id="bcs-uloz" disabled>' + (pr ? 'Zapísať príjem' : 'Zapísať výdaj') + '</button></form><button type="button" class="bcs-btn sv" data-bk="' + esc(p.k) + '">Späť</button>');
 		prepocet();
 	}
 	function hodnoty() { var f = $('bcs-pohyb'); function n(x) { var v = parseInt(f[x].value, 10); return isNaN(v) || v < 0 ? 0 : v; } return { kart: n('kart'), kk: n('kk'), volne: n('volne') }; }
@@ -217,6 +217,7 @@
 		var c = hodnoty(), ks = c.kart * c.kk + c.volne, p = prod(S.k), novy = S.typ === 'prijem' ? p.stock + ks : p.stock - ks, zle = '';
 		if (c.kart > 0 && c.kk === 0) { zle = 'Doplň počet kusov v kartóne.'; }
 		if (S.typ === 'vydaj' && novy < 0) { zle = 'Na sklade je len ' + p.stock + ' ks.'; }
+		if (!zle && S.typ === 'prijem' && !String(f.exp.value || '').trim()) { zle = 'Doplň dátum spotreby.'; }
 		$('bcs-vyp').innerHTML = c.kart + ' × ' + c.kk + ' + ' + c.volne + ' = <b>' + ks + ' ks</b><br>Stav po zápise: <b>' + novy + ' ks</b>' + (zle ? '<br><span class="zle">' + zle + '</span>' : '');
 		$('bcs-uloz').disabled = ks <= 0 || !!zle;
 	}
@@ -224,10 +225,10 @@
 		var c = hodnoty(), ks = c.kart * c.kk + c.volne, p = prod(S.k), pred = p.stock, typ = S.typ, b = $('bcs-uloz');
 		if (b.disabled || !db) { return; }
 		b.disabled = true; b.textContent = 'Zapisujem…';
-		db.collection('pohyby').add({ k: p.k, n: String(p.n), nazov: p.name + (p.vr ? ' – ' + p.vr : ''), typ: typ, kart: c.kart, kk: c.kk, volne: c.volne, ks: typ === 'prijem' ? ks : -ks, t: new Date().toISOString(), pozn: String(f.pozn.value || '').slice(0, 120), storno: false }).then(function () {
+		db.collection('pohyby').add({ k: p.k, n: String(p.n), nazov: p.name + (p.vr ? ' – ' + p.vr : ''), typ: typ, kart: c.kart, kk: c.kk, volne: c.volne, ks: typ === 'prijem' ? ks : -ks, t: new Date().toISOString(), pozn: String(f.pozn.value || '').slice(0, 120), exp: typ === 'prijem' ? String(f.exp.value || '').trim().slice(0, 40) : '', storno: false }).then(function () {
 			var novy = typ === 'prijem' ? pred + ks : pred - ks, s = p.img || p.foto;
 			S.k = null;
-			panel('<h2 id="d-title">' + (typ === 'prijem' ? 'Príjem zapísaný' : 'Výdaj zapísaný') + '</h2><p class="bcs-msg ok">' + (typ === 'prijem' ? '+' : '−') + ks + ' ks' + (c.kart ? ' (' + c.kart + ' × ' + c.kk + (c.volne ? ' + ' + c.volne : '') + ')' : '') + '</p><div class="bcs-prod">' + (s ? '<img alt="" src="' + s + '">' : '') + '<div><b>' + esc(p.name) + (p.vr ? ' – ' + esc(p.vr) : '') + '</b><br><span class="meta">Pred zápisom: ' + pred + ' ks</span></div></div><div class="bcs-velke"><span>Nový stav skladu</span><b>' + novy + '</b>kusov</div><button type="button" class="bcs-btn" data-bsken="1">Skenovať ďalší</button><button type="button" class="bcs-btn sv" data-bk="' + esc(p.k) + '">Späť na produkt</button>');
+			panel('<h2 id="d-title">' + (typ === 'prijem' ? 'Príjem zapísaný' : 'Výdaj zapísaný') + '</h2><p class="bcs-msg ok">' + (typ === 'prijem' ? '+' : '−') + ks + ' ks' + (c.kart ? ' (' + c.kart + ' × ' + c.kk + (c.volne ? ' + ' + c.volne : '') + ')' : '') + (typ === 'prijem' && f.exp.value ? ', spotreba ' + esc(String(f.exp.value).trim()) : '') + '</p><div class="bcs-prod">' + (s ? '<img alt="" src="' + s + '">' : '') + '<div><b>' + esc(p.name) + (p.vr ? ' – ' + esc(p.vr) : '') + '</b><br><span class="meta">Pred zápisom: ' + pred + ' ks</span></div></div><div class="bcs-velke"><span>Nový stav skladu</span><b>' + novy + '</b>kusov</div><button type="button" class="bcs-btn" data-bsken="1">Skenovať ďalší</button><button type="button" class="bcs-btn sv" data-bk="' + esc(p.k) + '">Späť na produkt</button>');
 		}, function (e) {
 			b.disabled = false; b.textContent = typ === 'prijem' ? 'Zapísať príjem' : 'Zapísať výdaj';
 			$('bcs-vyp').insertAdjacentHTML('beforeend', '<br><span class="zle">Zápis sa nepodaril' + (e && e.code === 'unavailable' ? ', skús to znova.' : '. Skontroluj internet a skús znova.') + '</span>');
@@ -241,7 +242,7 @@
 			var el = $('bcs-days'); if (!el) { return; }
 			var zive = R.filter(function (r) { return !r.storno; });
 			el.innerHTML = R.length ? '<div class="day"><h2>Zapísané v aplikácii</h2><span class="meta">príjem ' + zive.reduce(function (a, r) { return a + (r.ks > 0 ? r.ks : 0); }, 0) + ' ks · výdaj a e-shop ' + zive.reduce(function (a, r) { return a + (r.ks < 0 ? -r.ks : 0); }, 0) + ' ks</span></div><div class="tw"><table><tr><th>Kedy</th><th>Č.</th><th>Produkt</th><th>Pohyb</th><th class="num">Kusov</th></tr>' + R.map(function (r) {
-				var p = prod(r.k), popis = TYP[r.typ] || r.typ; if (r.kart) { popis += ' ' + r.kart + ' × ' + r.kk + (r.volne ? ' + ' + r.volne : ''); } if (r.obj) { popis += ' č. ' + r.obj; }
+				var p = prod(r.k), popis = TYP[r.typ] || r.typ; if (r.kart) { popis += ' ' + r.kart + ' × ' + r.kk + (r.volne ? ' + ' + r.volne : ''); } if (r.obj) { popis += ' č. ' + r.obj; } if (r.exp) { popis += ', spotreba ' + r.exp; }
 				return '<tr' + (r.storno ? ' class="bcs-st"' : '') + '><td>' + esc(cas(r.t)) + '</td><td>' + esc(p ? p.n : '') + '</td><td>' + esc(p ? p.name + (p.vr ? ' – ' + p.vr : '') : r.k) + '</td><td>' + esc(popis) + (r.storno ? ' (stornované)' : '') + '</td><td class="num">' + zn(r.ks) + '</td></tr>';
 			}).join('') + '</table></div>' : '';
 		}
